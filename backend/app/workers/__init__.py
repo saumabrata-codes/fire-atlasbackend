@@ -1,0 +1,1 @@
+"""Background worker entry points are added with scheduled ingestion."""

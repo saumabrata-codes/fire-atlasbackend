@@ -1,0 +1,52 @@
+name: fireatlas-regional
+
+services:
+  db:
+    image: postgis/postgis:16-3.7
+    environment:
+      POSTGRES_DB: fireatlas
+      POSTGRES_USER: fireatlas
+      POSTGRES_PASSWORD: fireatlas
+    volumes:
+      - regional-postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U fireatlas -d fireatlas"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  backend:
+    build: ./backend
+    command: ["sh", "-c", "python -m alembic upgrade head && exec uvicorn app.main:app --host 0.0.0.0 --port 8000"]
+    environment:
+      DATABASE_URL: postgresql+psycopg://fireatlas:fireatlas@db:5432/fireatlas
+      FIRMS_API_KEY: ${FIRMS_API_KEY:-}
+      FIRMS_COLLECTION_ENABLED: "false"
+      FIREATLAS_DATA_DIR: /app/data
+      FIREATLAS_REGIONAL_ONLY: "true"
+    ports:
+      - "127.0.0.1:8000:8000"
+    volumes:
+      - ./data/regional:/app/data/regional
+      - regional-reports:/app/data/reports
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=3)"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+
+  frontend:
+    build: ./frontend
+    ports:
+      - "127.0.0.1:5173:80"
+    depends_on:
+      backend:
+        condition: service_healthy
+        restart: true
+
+volumes:
+  regional-postgres:
+  regional-reports:
